@@ -43,6 +43,7 @@ def main():
 
     parsed = parse(data)
 
+    print(f'w: {parsed[0].width}, h: {parsed[0].height}, {parsed}')
 
 if __name__ == '__main__':
     main()
