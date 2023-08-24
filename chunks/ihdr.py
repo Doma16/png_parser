@@ -5,7 +5,7 @@ class ihdr(chunk):
     def __init__(self, bytes):
         super().__init__(bytes)
 
-        if self.len != 13:
+        if self.length != 13:
             raise ValueError
 
         self.width = int(self.ch_data[0:4].hex(), base=16)

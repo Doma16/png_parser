@@ -2,10 +2,10 @@ class chunk:
     # length, chunk type, chunk data, crc
     def __init__(self, bytes):
         
-        self.len = int(bytes[0:4].hex(), base=16)
+        self.length = int(bytes[0:4].hex(), base=16)
         self.ch_type = bytes[4:8]
-        self.ch_data = bytes[8: 8+self.len ]
-        self.crc = bytes[8+self.len, 12+self.len]
+        self.ch_data = bytes[8: 8+self.length ]
+        self.crc = bytes[8+self.length: 12+self.length]
 
     def __str__(self) -> str:
         return 'chunk'
