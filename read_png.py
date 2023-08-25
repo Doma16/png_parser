@@ -4,6 +4,8 @@ from chunks.iend import iend
 from chunks.ihdr import ihdr
 from chunks.plte import plte
 
+import zlib
+
 def parse(data):
 
     signature = data[0:8]
@@ -23,16 +25,22 @@ def parse(data):
 
         look = data[pos:pos+8]
         length = int(look[0:4].hex(), base=16)
-        type:bytes = look[4:8].decode()
+        type_:bytes = look[4:8].decode()
         
-        if type in chunks:
-            parsed.append(chunks[type](data[pos: pos+12+length]))
+        if type_ in chunks:
+            parsed.append(chunks[type_](data[pos: pos+12+length]))
         else:
             parsed.append(chunk(data[pos: pos+12+length]))
 
         pos += 12 + length
-    
-    return parsed
+
+    stream_idat = b''
+    for item in parsed:
+        if type(item) == idat:
+            stream_idat += item.img_data
+
+    ihdr_chunk:ihdr = parsed[0]
+    return ihdr_chunk, stream_idat
     
 
 def main():
@@ -41,9 +49,13 @@ def main():
     with open(image_name, 'rb') as f:
         data = f.read()
 
-    parsed = parse(data)
+    ihdr_chunk, stream_idat = parse(data)
 
-    print(f'w: {parsed[0].width}, h: {parsed[0].height}, {parsed}')
+    print(ihdr_chunk)
+    print(len(stream_idat))
+
+    out = zlib.decompress(stream_idat)
+    breakpoint()
 
 if __name__ == '__main__':
     main()
