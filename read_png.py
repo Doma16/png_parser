@@ -203,6 +203,7 @@ def main():
     plt.imshow(image)
     plt.show()
 
+    breakpoint()
 
 if __name__ == '__main__':
     main()
