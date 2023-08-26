@@ -5,6 +5,10 @@ from chunks.ihdr import ihdr
 from chunks.plte import plte
 
 import zlib
+import sys
+
+import numpy as np
+import matplotlib.pyplot as plt
 
 def parse(data):
 
@@ -18,8 +22,6 @@ def parse(data):
               'PLTE': plte}
     
     pos = 8
-
-    
     parsed = []
     while pos < len(data):
 
@@ -33,7 +35,7 @@ def parse(data):
             parsed.append(chunk(data[pos: pos+12+length]))
 
         pos += 12 + length
-
+    
     stream_idat = b''
     for item in parsed:
         if type(item) == idat:
@@ -41,21 +43,166 @@ def parse(data):
 
     ihdr_chunk:ihdr = parsed[0]
     return ihdr_chunk, stream_idat
+
+def none_unfilter(row, _, bpp):
+    return row
+
+def sub_unfilter(row, _, bpp):
+    new_row = b''
+
+    for x in range(len(row)):
+        if x - bpp < 0:
+            raw_b = 0
+        else:
+            raw_b = new_row[x-bpp]
+        sub = row[x]
+        
+        raw = (sub + raw_b) % 256
+        raw = raw.to_bytes(1, 'big')
+        
+        new_row += raw
+    return new_row
+
+def up_unfilter(row, prev_row, _):
+    new_row = b''
+
+    for x in range(len(row)):
+        if len(prev_row) == 0:
+            prior = 0
+        else:
+            prior = prev_row[x]
+        up = row[x]
+
+        raw = (up + prior) % 256
+        raw = raw.to_bytes(1, 'big')
+        
+        new_row += raw
+    return new_row
+
+def average_unfilter(row, prev_row, bpp):
+    new_row = b''
+
+    for x in range(len(row)):
+        if len(prev_row) == 0:
+            prior = 0
+        else:
+            prior = prev_row[x]
+        if x - bpp < 0:
+            raw_b = 0
+        else:
+            raw_b = row[x-bpp]
+
+        raw = (row[x] + (raw_b + prior) // 2) % 256
+        raw = raw.to_bytes(1, 'big')
+
+        new_row += raw
+    return new_row
+
+def paethe_predictor(a, b, c):
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc: return pa
+    elif pb <= pc: return pb
+    else: return pc
+
+def paethe_unfilter(row, prev_row, bpp):
+    new_row = b''
+
+    for x in range(len(row)):
+        if x - bpp < 0:
+            raw_b = 0
+        else:
+            raw_b = row[x-bpp]
+        if len(prev_row) == 0:
+            prior = 0
+        else:
+            prior = prev_row[x]
+        if x - bpp < 0 or len(prev_row) == 0:
+            prior_b = 0
+        else:
+            prior_b = prev_row[x-bpp]
+
+        pp = paethe_predictor(raw_b, prior, prior_b)
+        raw = (row[x] + pp) % 256
+        raw = raw.to_bytes(1, 'big')
+
+        new_row += raw
+    return new_row
+
+def unfilter_row(bit, scanrow, prevrow):
     
+    type = int(bit.hex(), base=16)
+
+    type_name = {
+        0: none_unfilter,
+        1: sub_unfilter,
+        2: up_unfilter,
+        3: average_unfilter,
+        4: paethe_unfilter
+    }
+    method = type_name[type]
+    bpp = 4
+    return method(scanrow, prevrow, bpp)
+
+def uncompress(ihdr_chunk, stream_idat):
+    filtered_image = zlib.decompress(stream_idat)
+    width = ihdr_chunk.width
+    height = ihdr_chunk.height
+
+    if ihdr_chunk.color_type != 6:
+        raise NotImplementedError
+
+    if ihdr_chunk.bit_depth != 8:
+        raise NotImplementedError
+    
+    reading = (1, 1+4*width)
+    line_len = sum(reading) - 1
+
+    rows = []
+    prev_scanrow = b''
+
+    for i in range(height):
+        bit = filtered_image[0+line_len*i:reading[0]+line_len*i]
+            
+        scanrow = filtered_image[reading[0]+line_len*i:reading[1]+line_len*i]
+        decoded_row = unfilter_row(bit, scanrow, prev_scanrow)
+
+        rows.append(decoded_row)
+        prev_scanrow = decoded_row
+    
+    for id, row in enumerate(rows):
+        new_row_val = []
+        for i in range(0, len(row), 4):
+            r = row[i]
+            g = row[i+1]
+            b = row[i+2]
+            
+            pix = np.array([r,g,b])
+            new_row_val.append(pix)
+
+        rows[id] = np.stack(new_row_val)
+
+    
+    img = np.stack(rows)
+    return img
 
 def main():
 
-    image_name = 'MB_original.png'
+    image_name = 'sal4.png'
+    if len(sys.argv) == 2:
+        image_name = sys.argv[-1]
+
     with open(image_name, 'rb') as f:
         data = f.read()
 
     ihdr_chunk, stream_idat = parse(data)
+    image = uncompress(ihdr_chunk, stream_idat)
+   
+    plt.imshow(image)
+    plt.show()
 
-    print(ihdr_chunk)
-    print(len(stream_idat))
-
-    out = zlib.decompress(stream_idat)
-    breakpoint()
 
 if __name__ == '__main__':
     main()
