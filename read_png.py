@@ -10,7 +10,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-def parse(data):
+def parse(data, ret_nodes=False):
 
     signature = data[0:8]
     if int(signature.hex(), base=16) != 9894494448401390090:
@@ -40,6 +40,9 @@ def parse(data):
     for item in parsed:
         if type(item) == idat:
             stream_idat += item.img_data
+
+    if ret_nodes:
+        return parsed
 
     ihdr_chunk:ihdr = parsed[0]
     return ihdr_chunk, stream_idat
@@ -90,7 +93,7 @@ def average_unfilter(row, prev_row, bpp):
         if x - bpp < 0:
             raw_b = 0
         else:
-            raw_b = row[x-bpp]
+            raw_b = new_row[x-bpp]
 
         raw = (row[x] + (raw_b + prior) // 2) % 256
         raw = raw.to_bytes(1, 'big')
@@ -103,9 +106,9 @@ def paethe_predictor(a, b, c):
     pa = abs(p - a)
     pb = abs(p - b)
     pc = abs(p - c)
-    if pa <= pb and pa <= pc: return pa
-    elif pb <= pc: return pb
-    else: return pc
+    if pa <= pb and pa <= pc: return a
+    elif pb <= pc: return b
+    else: return c
 
 def paethe_unfilter(row, prev_row, bpp):
     new_row = b''
@@ -114,7 +117,7 @@ def paethe_unfilter(row, prev_row, bpp):
         if x - bpp < 0:
             raw_b = 0
         else:
-            raw_b = row[x-bpp]
+            raw_b = new_row[x-bpp]
         if len(prev_row) == 0:
             prior = 0
         else:
@@ -147,6 +150,8 @@ def unfilter_row(bit, scanrow, prevrow):
     return method(scanrow, prevrow, bpp)
 
 def uncompress(ihdr_chunk, stream_idat):
+    print(f'Color type: {ihdr_chunk.color_type}, Bit depth: {ihdr_chunk.bit_depth}')
+
     filtered_image = zlib.decompress(stream_idat)
     width = ihdr_chunk.width
     height = ihdr_chunk.height
@@ -178,8 +183,9 @@ def uncompress(ihdr_chunk, stream_idat):
             r = row[i]
             g = row[i+1]
             b = row[i+2]
+            a = row[i+3]
             
-            pix = np.array([r,g,b])
+            pix = np.array([r,g,b,a])
             new_row_val.append(pix)
 
         rows[id] = np.stack(new_row_val)
@@ -203,7 +209,6 @@ def main():
     plt.imshow(image)
     plt.show()
 
-    breakpoint()
 
 if __name__ == '__main__':
     main()
