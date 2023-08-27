@@ -43,7 +43,7 @@ def parse(data, ret_nodes=False):
 
     if ret_nodes:
         return parsed
-    breakpoint()
+        
     ihdr_chunk:ihdr = parsed[0]
     return ihdr_chunk, stream_idat
 
