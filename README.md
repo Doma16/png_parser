@@ -1,6 +1,7 @@
 # png_parser
 
 This is currently a very bad png parser and decoder that needs more work.
+The only thing it is good for is for stripping metadata.
 
 Example:
 
